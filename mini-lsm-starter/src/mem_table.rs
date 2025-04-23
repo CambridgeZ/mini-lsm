@@ -53,7 +53,16 @@ pub(crate) fn map_bound(bound: Bound<&[u8]>) -> Bound<Bytes> {
 impl MemTable {
     /// Create a new mem-table.
     pub fn create(_id: usize) -> Self {
-        unimplemented!()
+        // unimplemented!()
+        let map = Arc::new(SkipMap::new());
+        let approximate_size = Arc::new(AtomicUsize::new(0));
+        let wal = None;
+        MemTable {
+            map,
+            wal,
+            id: _id,
+            approximate_size,
+        }
     }
 
     /// Create a new mem-table with WAL
@@ -84,7 +93,8 @@ impl MemTable {
 
     /// Get a value by key.
     pub fn get(&self, _key: &[u8]) -> Option<Bytes> {
-        unimplemented!()
+        // unimplemented!()
+        self.map.get(_key).map(|entry| entry.value().clone())
     }
 
     /// Put a key-value pair into the mem-table.
@@ -93,7 +103,25 @@ impl MemTable {
     /// In week 2, day 6, also flush the data to WAL.
     /// In week 3, day 5, modify the function to use the batch API.
     pub fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> {
-        unimplemented!()
+        // unimplemented!()
+        // if self.map.contains_key(_key) {
+        //     // If the key already exists, we need to update the value and the approximate size.
+        //     let old_value = self.map.get(_key).unwrap().value().clone();
+        //     self.approximate_size.fetch_add(
+        //         _value.len() - old_value.len(),
+        //         std::sync::atomic::Ordering::Relaxed,
+        //     );
+        // } else {
+        //     self.approximate_size.fetch_add(
+        //         _key.len() + _value.len(),
+        //         std::sync::atomic::Ordering::Relaxed,
+        //     );
+        // }
+
+        self.map
+            .insert(Bytes::copy_from_slice(_key), Bytes::copy_from_slice(_value));
+
+        return Ok(());
     }
 
     /// Implement this in week 3, day 5.

@@ -41,11 +41,12 @@ pub type BlockCache = moka::sync::Cache<(usize, usize), Arc<Block>>;
 /// Represents the state of the storage engine.
 #[derive(Clone)]
 pub struct LsmStorageState {
-    /// The current memtable.
+    /// The current memtable. 现在的 memtable
     pub memtable: Arc<MemTable>,
-    /// Immutable memtables, from latest to earliest.
+    /// Immutable memtables, from latest to earliest. 可变的 memtable，从最新的到最早的
     pub imm_memtables: Vec<Arc<MemTable>>,
     /// L0 SSTs, from latest to earliest.
+    /// SST 是指 Sorted String Table 的缩写，是一种高效的存储格式，通常用于数据库和文件系统中。
     pub l0_sstables: Vec<usize>,
     /// SsTables sorted by key range; L1 - L_max for leveled compaction, or tiers for tiered
     /// compaction.
@@ -294,7 +295,21 @@ impl LsmStorageInner {
 
     /// Get a key from the storage. In day 7, this can be further optimized by using a bloom filter.
     pub fn get(&self, _key: &[u8]) -> Result<Option<Bytes>> {
-        unimplemented!()
+        // unimplemented!()
+        let state = self.state.read();
+        let result = state.memtable.get(_key);
+
+        // 查看是否为删除标记 b"", 是删除标准返回None
+        return match result {
+            Some(v) => {
+                if v.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(v))
+                }
+            }
+            None => Ok(None),
+        };
     }
 
     /// Write a batch of data into the storage. Implement in week 2 day 7.
@@ -304,12 +319,21 @@ impl LsmStorageInner {
 
     /// Put a key-value pair into the storage by writing into the current memtable.
     pub fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> {
-        unimplemented!()
+        // unimplemented!()
+        let state = self.state.write();
+        let res = state.memtable.put(_key, _value);
+        return res;
     }
 
     /// Remove a key from the storage by writing an empty value.
     pub fn delete(&self, _key: &[u8]) -> Result<()> {
-        unimplemented!()
+        // unimplemented!()
+        let state = self.state.write();
+        if state.memtable.get(_key).is_none() {
+            return Ok(());
+        }
+        let res = state.memtable.put(_key, &[]);
+        return res;
     }
 
     pub(crate) fn path_of_sst_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
