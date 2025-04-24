@@ -21,7 +21,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
-use anyhow::Result;
+
+use anyhow::{Ok, Result};
 use bytes::Bytes;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 
@@ -31,7 +32,7 @@ use crate::compact::{
     SimpleLeveledCompactionController, SimpleLeveledCompactionOptions, TieredCompactionController,
 };
 use crate::lsm_iterator::{FusedIterator, LsmIterator};
-use crate::manifest::Manifest;
+use crate::manifest::{self, Manifest, ManifestRecord};
 use crate::mem_table::MemTable;
 use crate::mvcc::LsmMvccInner;
 use crate::table::SsTable;
@@ -140,10 +141,11 @@ pub(crate) struct LsmStorageInner {
     pub(crate) state_lock: Mutex<()>,
     path: PathBuf,
     pub(crate) block_cache: Arc<BlockCache>,
+    // 下一个 SST ID
     next_sst_id: AtomicUsize,
     pub(crate) options: Arc<LsmStorageOptions>,
     pub(crate) compaction_controller: CompactionController,
-    pub(crate) manifest: Option<Manifest>,
+    pub(crate) manifest: Option<Manifest>, // Manifest file for LSM tree
     pub(crate) mvcc: Option<LsmMvccInner>,
     pub(crate) compaction_filters: Arc<Mutex<Vec<CompactionFilter>>>,
 }
@@ -320,20 +322,86 @@ impl LsmStorageInner {
     /// Put a key-value pair into the storage by writing into the current memtable.
     pub fn put(&self, _key: &[u8], _value: &[u8]) -> Result<()> {
         // unimplemented!()
-        let state = self.state.write();
-        let res = state.memtable.put(_key, _value);
-        return res;
+        // 检查当前的 memtable 是否已经满了
+
+        // let state = self.state.write();
+        // let res = state.memtable.put(_key, _value);
+        // return res;
+
+        // put things into the memtable, checks capacity, and drop the read lock on LSM state
+        // let state = self.state.read();
+        // let res = state.memtable.put(_key, _value);
+
+        // let mut size_of_memtable = state.memtable.approximate_size();
+
+        let(res, mut size_of_memtable) = {
+            let state = self.state.read();
+            let res = state.memtable.put(_key, _value);
+            (res, state.memtable.approximate_size())
+        };
+
+        // println!("size_of_memtable: {} and target size is {}", size_of_memtable, self.options.target_sst_size);
+        
+
+        match res{
+            std::result::Result::Ok(_) => {
+                if size_of_memtable >= self.options.target_sst_size {
+                    let lock = self.state_lock.lock();
+                    size_of_memtable = self.state.read().memtable.approximate_size();
+                    if size_of_memtable >= self.options.target_sst_size {
+                        // force freeze the current memtable to an immutable memtable
+                        return self.force_freeze_memtable(&lock);
+                    }
+                    else {
+                        return Ok(());
+                    }
+                }
+                else{
+                    return Ok(());
+                }
+            }
+            e @ Err(_)=>{
+                return e;
+            }
+
+        }
+        // Ok(())
+
     }
 
     /// Remove a key from the storage by writing an empty value.
     pub fn delete(&self, _key: &[u8]) -> Result<()> {
-        // unimplemented!()
-        let state = self.state.write();
-        if state.memtable.get(_key).is_none() {
-            return Ok(());
+        let(res, mut size_of_memtable) = {
+            let state = self.state.read();
+            let res = state.memtable.put(_key, &[]);
+            (res, state.memtable.approximate_size())
+        };
+
+        // println!("size_of_memtable: {} and target size is {}", size_of_memtable, self.options.target_sst_size);
+        
+
+        match res{
+            std::result::Result::Ok(_) => {
+                if size_of_memtable >= self.options.target_sst_size {
+                    let lock = self.state_lock.lock();
+                    size_of_memtable = self.state.read().memtable.approximate_size();
+                    if size_of_memtable >= self.options.target_sst_size {
+                        // force freeze the current memtable to an immutable memtable
+                        return self.force_freeze_memtable(&lock);
+                    }
+                    else {
+                        return Ok(());
+                    }
+                }
+                else{
+                    return Ok(());
+                }
+            }
+            e @ Err(_)=>{
+                return e;
+            }
+
         }
-        let res = state.memtable.put(_key, &[]);
-        return res;
     }
 
     pub(crate) fn path_of_sst_static(path: impl AsRef<Path>, id: usize) -> PathBuf {
@@ -358,7 +426,30 @@ impl LsmStorageInner {
 
     /// Force freeze the current memtable to an immutable memtable
     pub fn force_freeze_memtable(&self, _state_lock_observer: &MutexGuard<'_, ()>) -> Result<()> {
-        unimplemented!()
+        // unimplemented!()
+        let mut lock = self.state.write();
+
+        // lock作为引用之后 然后 克隆
+        let mut state = lock.as_ref().clone();
+        let id = self.next_sst_id();
+        // let mem_table = Arc::new(MemTable::create_with_wal(id, self.path_of_wal(id))?);
+        let mem_table = Arc::new(MemTable::create(id));
+        
+        // 这里是将当前的 memtable 变成不可变的 memtable
+        let old_mem_table = std::mem::replace(&mut state.memtable, mem_table);
+        state.imm_memtables.insert(0, old_mem_table);
+
+        if let Some(manifest) = &self.manifest {
+            manifest.add_record(_state_lock_observer, ManifestRecord::NewMemtable(id))?;
+        }
+
+        *lock = Arc::new(state);
+        // 释放锁 _state_lock_observer
+        // drop(_state_lock_observer);
+
+
+        Ok(())
+
     }
 
     /// Force flush the earliest-created immutable memtable to disk

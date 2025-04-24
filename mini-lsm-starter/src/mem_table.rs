@@ -107,16 +107,18 @@ impl MemTable {
         // if self.map.contains_key(_key) {
         //     // If the key already exists, we need to update the value and the approximate size.
         //     let old_value = self.map.get(_key).unwrap().value().clone();
-        //     self.approximate_size.fetch_add(
-        //         _value.len() - old_value.len(),
-        //         std::sync::atomic::Ordering::Relaxed,
-        //     );
+        //     self.approximate_size
+        //         .fetch_add(_value.len(), std::sync::atomic::Ordering::Relaxed);
+        //     self.approximate_size
+        //         .fetch_sub(old_value.len(), std::sync::atomic::Ordering::Relaxed);
         // } else {
         //     self.approximate_size.fetch_add(
         //         _key.len() + _value.len(),
         //         std::sync::atomic::Ordering::Relaxed,
         //     );
         // }
+        self.approximate_size
+            .fetch_add(_key.len() + _value.len(), std::sync::atomic::Ordering::SeqCst);
 
         self.map
             .insert(Bytes::copy_from_slice(_key), Bytes::copy_from_slice(_value));
