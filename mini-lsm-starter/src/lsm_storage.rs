@@ -301,6 +301,7 @@ impl LsmStorageInner {
         let result = state.memtable.get(_key);
 
         // 查看是否为删除标记 b"", 是删除标准返回None
+        print!("result: {:?}", result);
         return match result {
             Some(v) => {
                 if v.is_empty() {
@@ -309,7 +310,23 @@ impl LsmStorageInner {
                     Ok(Some(v))
                 }
             }
-            None => Ok(None),
+            None => {
+                // 如果在 memtable 中没有找到，遍历 imm_memtables
+                for old_memtable in state.imm_memtables.iter() {
+                    let result = old_memtable.get(_key);
+                    match result {
+                        Some(v) => {
+                            if v.is_empty() {
+                                return Ok(None);
+                            } else {
+                                return Ok(Some(v));
+                            }
+                        }
+                        None => continue,
+                    }
+                }
+                return Ok(None);
+            }
         };
     }
 
