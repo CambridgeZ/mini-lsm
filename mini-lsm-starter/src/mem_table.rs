@@ -117,8 +117,10 @@ impl MemTable {
         //         std::sync::atomic::Ordering::Relaxed,
         //     );
         // }
-        self.approximate_size
-            .fetch_add(_key.len() + _value.len(), std::sync::atomic::Ordering::SeqCst);
+        self.approximate_size.fetch_add(
+            _key.len() + _value.len(),
+            std::sync::atomic::Ordering::SeqCst,
+        );
 
         self.map
             .insert(Bytes::copy_from_slice(_key), Bytes::copy_from_slice(_value));

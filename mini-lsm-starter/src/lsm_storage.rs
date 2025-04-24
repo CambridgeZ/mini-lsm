@@ -21,7 +21,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
-
 use anyhow::{Ok, Result};
 use bytes::Bytes;
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -334,16 +333,15 @@ impl LsmStorageInner {
 
         // let mut size_of_memtable = state.memtable.approximate_size();
 
-        let(res, mut size_of_memtable) = {
+        let (res, mut size_of_memtable) = {
             let state = self.state.read();
             let res = state.memtable.put(_key, _value);
             (res, state.memtable.approximate_size())
         };
 
         // println!("size_of_memtable: {} and target size is {}", size_of_memtable, self.options.target_sst_size);
-        
 
-        match res{
+        match res {
             std::result::Result::Ok(_) => {
                 if size_of_memtable >= self.options.target_sst_size {
                     let lock = self.state_lock.lock();
@@ -351,36 +349,31 @@ impl LsmStorageInner {
                     if size_of_memtable >= self.options.target_sst_size {
                         // force freeze the current memtable to an immutable memtable
                         return self.force_freeze_memtable(&lock);
-                    }
-                    else {
+                    } else {
                         return Ok(());
                     }
-                }
-                else{
+                } else {
                     return Ok(());
                 }
             }
-            e @ Err(_)=>{
+            e @ Err(_) => {
                 return e;
             }
-
         }
         // Ok(())
-
     }
 
     /// Remove a key from the storage by writing an empty value.
     pub fn delete(&self, _key: &[u8]) -> Result<()> {
-        let(res, mut size_of_memtable) = {
+        let (res, mut size_of_memtable) = {
             let state = self.state.read();
             let res = state.memtable.put(_key, &[]);
             (res, state.memtable.approximate_size())
         };
 
         // println!("size_of_memtable: {} and target size is {}", size_of_memtable, self.options.target_sst_size);
-        
 
-        match res{
+        match res {
             std::result::Result::Ok(_) => {
                 if size_of_memtable >= self.options.target_sst_size {
                     let lock = self.state_lock.lock();
@@ -388,19 +381,16 @@ impl LsmStorageInner {
                     if size_of_memtable >= self.options.target_sst_size {
                         // force freeze the current memtable to an immutable memtable
                         return self.force_freeze_memtable(&lock);
-                    }
-                    else {
+                    } else {
                         return Ok(());
                     }
-                }
-                else{
+                } else {
                     return Ok(());
                 }
             }
-            e @ Err(_)=>{
+            e @ Err(_) => {
                 return e;
             }
-
         }
     }
 
@@ -434,7 +424,7 @@ impl LsmStorageInner {
         let id = self.next_sst_id();
         // let mem_table = Arc::new(MemTable::create_with_wal(id, self.path_of_wal(id))?);
         let mem_table = Arc::new(MemTable::create(id));
-        
+
         // 这里是将当前的 memtable 变成不可变的 memtable
         let old_mem_table = std::mem::replace(&mut state.memtable, mem_table);
         state.imm_memtables.insert(0, old_mem_table);
@@ -447,9 +437,7 @@ impl LsmStorageInner {
         // 释放锁 _state_lock_observer
         // drop(_state_lock_observer);
 
-
         Ok(())
-
     }
 
     /// Force flush the earliest-created immutable memtable to disk
