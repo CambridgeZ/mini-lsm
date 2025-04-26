@@ -20,7 +20,7 @@ use std::collections::BinaryHeap;
 
 use anyhow::Result;
 
-use crate::key::KeySlice;
+use crate::key::{self, KeySlice};
 
 use super::StorageIterator;
 
@@ -59,7 +59,21 @@ pub struct MergeIterator<I: StorageIterator> {
 
 impl<I: StorageIterator> MergeIterator<I> {
     pub fn create(iters: Vec<Box<I>>) -> Self {
-        unimplemented!()
+        // unimplemented!()
+        let mut heap = BinaryHeap::new();
+
+        for (i, iter) in iters.into_iter().enumerate() {
+            if iter.is_valid() {
+                heap.push(HeapWrapper(i, iter));
+            }
+        }
+
+        let current = heap.pop();
+
+        MergeIterator {
+            iters: heap,
+            current,
+        }
     }
 }
 
@@ -69,18 +83,61 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
     type KeyType<'a> = KeySlice<'a>;
 
     fn key(&self) -> KeySlice {
-        unimplemented!()
+        // unimplemented!()
+        self.current.as_ref().map(|x| x.1.key()).unwrap_or_default()
     }
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        // unimplemented!()
+        self.current
+            .as_ref()
+            .map(|x| x.1.value())
+            .unwrap_or_default()
     }
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        // unimplemented!()
+        self.current.is_some()
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        if let Some(mut wrapper) = self.current.take() {
+            let last_key = wrapper.1.key().to_key_vec(); // 保存上一个 key
+            wrapper.1.next()?; // 当前迭代器向前
+            if wrapper.1.is_valid() {
+                self.iters.push(wrapper);
+            }
+
+            loop {
+                match self.iters.pop() {
+                    Some(mut top) => {
+                        if top.1.key().to_key_vec() == last_key {
+                            top.1.next()?; // 移动这个 iterator
+                            if top.1.is_valid() {
+                                self.iters.push(top);
+                            }
+                            // 继续循环，找下一个 key
+                        } else {
+                            self.current = Some(top);
+                            break;
+                        }
+                    }
+                    None => {
+                        self.current = None;
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 }
+
+// 小结一下 MergeIterator 工作流程
+// 	1.	初始化时，把所有有效 iterators 装进小根堆。
+// 	2.	当前元素是堆顶最小的那个 iterator 的 (key, value)。
+// 	3.	每次 next()：
+// 	•	当前的 iterator 向前, 并且要保证和之前的关键字不相同，因为相同的要取最新的。
+// 	•	如果还有数据，重新放回 heap。
+// 	•	更新成新的堆顶。
