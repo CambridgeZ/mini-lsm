@@ -39,19 +39,38 @@ impl StorageIterator for LsmIterator {
     type KeyType<'a> = &'a [u8];
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        // unimplemented!()
+        return self.inner.is_valid();
     }
 
     fn key(&self) -> &[u8] {
-        unimplemented!()
+        let key = self.inner.key();
+        let slice = key.raw_ref(); // 或者写成 key.0 也行
+
+        if slice.is_empty() {
+            panic!("key is empty");
+        }
+
+        slice
     }
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        // unimplemented!()
+        let value = self.inner.value();
+        if value.is_empty() {
+            panic!("value is empty");
+        }
+        value
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        // unimplemented!()
+        self.inner.next()?;
+        if self.inner.is_valid() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Iterator is not valid"))
+        }
     }
 }
 
@@ -79,18 +98,43 @@ impl<I: StorageIterator> StorageIterator for FusedIterator<I> {
         Self: 'a;
 
     fn is_valid(&self) -> bool {
-        unimplemented!()
+        // unimplemented!()
+        if self.has_errored {
+            return false;
+        } else if self.iter.is_valid() {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     fn key(&self) -> Self::KeyType<'_> {
-        unimplemented!()
+        // unimplemented!()
+        if self.has_errored {
+            panic!("Iterator is not valid");
+        }
+        self.iter.key()
     }
 
     fn value(&self) -> &[u8] {
-        unimplemented!()
+        // unimplemented!()
+        if self.has_errored {
+            panic!("Iterator is not valid");
+        }
+        self.iter.value()
     }
 
     fn next(&mut self) -> Result<()> {
-        unimplemented!()
+        // unimplemented!()
+        if self.has_errored {
+            return Err(anyhow::anyhow!("Iterator is not valid"));
+        }
+        match self.iter.next() {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                self.has_errored = true;
+                Err(e)
+            }
+        }
     }
 }

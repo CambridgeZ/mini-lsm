@@ -175,9 +175,9 @@ pub struct MemTableIterator {
     /// Stores a skipmap iterator that refers to the lifetime of `MemTableIterator` itself.
     #[borrows(map)]
     #[not_covariant]
-    iter: SkipMapRangeIter<'this>,
+    iter: SkipMapRangeIter<'this>, // 表示这个迭代器的生命周期和 `MemTableIterator` 的生命周期是一样的
     /// Stores the current key-value pair.
-    item: (Bytes, Bytes),
+    item: (Bytes, Bytes), // 现在的 key-value 对
 }
 
 impl StorageIterator for MemTableIterator {
@@ -201,6 +201,7 @@ impl StorageIterator for MemTableIterator {
 
     fn next(&mut self) -> Result<()> {
         // unimplemented!()
+
         self.with_mut(|values| match values.iter.next() {
             Some(e) => *values.item = (e.key().clone(), e.value().clone()),
             None => {

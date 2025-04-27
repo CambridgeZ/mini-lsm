@@ -61,10 +61,11 @@ impl<I: StorageIterator> MergeIterator<I> {
     pub fn create(iters: Vec<Box<I>>) -> Self {
         // unimplemented!()
         let mut heap = BinaryHeap::new();
+        // let mut seen_keys = std::collections::HashSet::new();
 
-        for (i, iter) in iters.into_iter().enumerate() {
-            if iter.is_valid() {
-                heap.push(HeapWrapper(i, iter));
+        for (i, mutiter) in iters.into_iter().enumerate() {
+            if mutiter.is_valid() {
+                heap.push(HeapWrapper(i, mutiter));
             }
         }
 
@@ -105,6 +106,7 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
             let last_key = wrapper.1.key().to_key_vec(); // 保存上一个 key
             wrapper.1.next()?; // 当前迭代器向前
             if wrapper.1.is_valid() {
+                // 如果当前迭代器还有数据，放回小根堆
                 self.iters.push(wrapper);
             }
 
@@ -123,6 +125,7 @@ impl<I: 'static + for<'a> StorageIterator<KeyType<'a> = KeySlice<'a>>> StorageIt
                         }
                     }
                     None => {
+                        // 没有数据了
                         self.current = None;
                         break;
                     }
