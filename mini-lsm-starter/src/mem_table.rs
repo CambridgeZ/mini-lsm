@@ -137,7 +137,7 @@ impl MemTable {
         }
         .build();
 
-        iter.next();
+        let _ = iter.next();
         iter
     }
 

@@ -71,6 +71,14 @@ impl<I: StorageIterator> MergeIterator<I> {
 
         let current = heap.pop();
 
+        // 遍历heap，去掉value为空的
+        // for i in 0..heap.len() {
+        //     let mut wrapper = heap.pop().unwrap();
+        //     if wrapper.1.is_valid() {
+        //         heap.push(wrapper);
+        //     }
+        // }
+
         MergeIterator {
             iters: heap,
             current,

@@ -169,10 +169,9 @@ where
         assert_eq!(
             k,
             iter.key(),
-            "expected key: {:?}, actual key: {:?},and actual value: {:?}",
+            "expected key: {:?}, actual key: {:?}",
             k,
             as_bytes(iter.key()),
-            as_bytes(iter.value()),
         );
         assert_eq!(
             v,
